@@ -15,4 +15,5 @@ System Features:
 - Responsive OpenLayers map functioning entirely offline
 
 A small demo:
-https://github.com/user-attachments/assets/6ad509b4-34ad-4a41-9ffc-4953f018230a
+
+https://github.com/user-attachments/assets/6d60908f-f6ad-4a48-89fc-4e4255b17c1a
