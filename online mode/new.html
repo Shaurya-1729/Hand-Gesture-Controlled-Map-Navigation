@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gesture-Controlled Map</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v7.3.0/ol.css">
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+    #map {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+    #camera-container {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      width: 120px;
+      height: 90px;
+      background: black;
+      border: 2px solid white;
+      border-radius: 5px;
+      overflow: hidden;
+      z-index: 10;
+    }
+    #gesture-info {
+      position: absolute;
+      top: 10px;
+      left: 40px; /* Moved to right side */
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 4px;
+      z-index: 10;
+      transition: all 0.3s ease;
+    }
+    .control-buttons {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 10;
+    }
+    .control-button {
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+    .control-button:hover {
+      background: rgba(0,0,0,0.9);
+    }
+    #gesture-toggle {
+      background-color: #4CAF50;
+    }
+    #gesture-toggle.inactive {
+      background-color: #f44336;
+    }
+    video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+
+    /* Directional Arrows */
+    .direction-arrow {
+      position: absolute;
+      width: 40px;
+      height: 40px;
+      opacity: 0.8;
+      z-index: 5;
+      transition: all 0.3s ease;
+      pointer-events: none;
+      background-color: rgba(0,0,0,0.8);
+      border-radius: 50%;
+    }
+
+    /* Arrow positions */
+    #arrow-up {
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23ffffff"><path d="M7 14l5-5 5 5z"/></svg>') no-repeat center;
+    }
+
+    #arrow-down {
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23ffffff"><path d="M7 10l5 5 5-5z"/></svg>') no-repeat center;
+    }
+
+    #arrow-left {
+      left: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23ffffff"><path d="M14 7l-5 5 5 5z"/></svg>') no-repeat center;
+    }
+
+    #arrow-right {
+      right: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23ffffff"><path d="M10 17l5-5-5-5z"/></svg>') no-repeat center;
+    }
+
+    /* Zoom buttons */
+    #zoom-in {
+      top: 100px;
+      right: 20px;
+      opacity: 0.6;
+      background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23ffffff"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>') no-repeat center;
+    }
+
+    #zoom-out {
+      top: 150px;
+      right: 20px;
+      opacity: 0.6;
+      background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23ffffff"><path d="M19 13H5v-2h14v2z"/></svg>') no-repeat center;
+    }
+
+    /* Active state */
+    .active-arrow {
+      opacity: 0.9;
+      transform: scale(1.3);
+      background-color: rgba(76, 175, 80, 0.9);
+      box-shadow: 0 0 15px rgba(76, 175, 80, 0.8);
+    }
+
+    .gesture-active {
+      background-color: rgba(76, 175, 80, 0.9);
+      box-shadow: 0 0 20px rgba(76, 175, 80, 0.8);
+    }
+
+    /* Crosshair style */
+    #crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 20px;
+      height: 20px;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    #crosshair::before, #crosshair::after {
+      content: '';
+      position: absolute;
+      background: rgba(0,0,0,0.8);
+    }
+
+    #crosshair::before {
+      width: 100%;
+      height: 1px;
+      top: 50%;
+      left: 0;
+      transform: translateY(-50%);
+    }
+
+    #crosshair::after {
+      width: 1px;
+      height: 100%;
+      left: 50%;
+      top: 0;
+      transform: translateX(-50%);
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="camera-container">
+    <video id="camera" autoplay playsinline muted></video>
+  </div>
+  <div id="gesture-info">Initializing...</div>
+  <div class="control-buttons">
+    <button id="recenter-button" class="control-button">Recenter on India</button>
+    <button id="gesture-toggle" class="control-button">Stop Gestures</button>
+  </div>
+
+  <!-- Directional Arrows -->
+  <div id="arrow-up" class="direction-arrow"></div>
+  <div id="arrow-down" class="direction-arrow"></div>
+  <div id="arrow-left" class="direction-arrow"></div>
+  <div id="arrow-right" class="direction-arrow"></div>
+  <div id="zoom-in" class="direction-arrow"></div>
+  <div id="zoom-out" class="direction-arrow"></div>
+
+  <!-- Crosshair element -->
+  <div id="crosshair"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/ol@v7.3.0/dist/ol.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+
+  <script>
+    // Map controls
+    const map = new ol.Map({
+      target: 'map',
+      layers: [
+        new ol.layer.Tile({
+          source: new ol.source.OSM()
+        })
+      ],
+      view: new ol.View({
+        center: ol.proj.fromLonLat([0, 0]),
+        zoom: 2,
+        minZoom: 1,
+        maxZoom: 18
+      })
+    });
+
+    const view = map.getView();
+    const gestureInfo = document.getElementById('gesture-info');
+    const video = document.getElementById('camera');
+    const recenterButton = document.getElementById('recenter-button');
+    const gestureToggle = document.getElementById('gesture-toggle');
+
+    // Arrow elements
+    const arrowUp = document.getElementById('arrow-up');
+    const arrowDown = document.getElementById('arrow-down');
+    const arrowLeft = document.getElementById('arrow-left');
+    const arrowRight = document.getElementById('arrow-right');
+    const zoomIn = document.getElementById('zoom-in');
+    const zoomOut = document.getElementById('zoom-out');
+
+    // Gesture control state
+    let gesturesEnabled = true;
+    let handsInstance = null;
+    let cameraInstance = null;
+
+    // Recenter on India function
+    function recenterOnIndia() {
+      const indiaCenter = [77.2090, 28.6139];
+      view.animate({
+        center: ol.proj.fromLonLat(indiaCenter),
+        zoom: 5,
+        duration: 1000
+      });
+    }
+
+    // Toggle gesture control function
+    function toggleGestures() {
+      gesturesEnabled = !gesturesEnabled;
+
+      if (gesturesEnabled) {
+        gestureToggle.textContent = "Stop Gestures";
+        gestureToggle.classList.remove('inactive');
+        gestureInfo.textContent = "Gestures enabled - show your hand";
+      } else {
+        gestureToggle.textContent = "Start Gestures";
+        gestureToggle.classList.add('inactive');
+        gestureInfo.textContent = "Gestures disabled";
+      }
+    }
+
+    // Add click events to buttons
+    recenterButton.addEventListener('click', recenterOnIndia);
+    gestureToggle.addEventListener('click', toggleGestures);
+
+    // Gesture control settings
+    let lastGestureTime = 0;
+    const gestureCooldown = 800;
+    const moveStep = 2;
+    const zoomStep = 0.3;
+
+    // Reset all arrow animations
+    function resetArrows() {
+      arrowUp.classList.remove('active-arrow');
+      arrowDown.classList.remove('active-arrow');
+      arrowLeft.classList.remove('active-arrow');
+      arrowRight.classList.remove('active-arrow');
+      zoomIn.classList.remove('active-arrow');
+      zoomOut.classList.remove('active-arrow');
+      gestureInfo.classList.remove('gesture-active');
+    }
+
+    // Movement function with boundaries
+    function moveMap(dx, dy, dz) {
+      if (!gesturesEnabled) return;
+
+      const center = view.getCenter();
+      const zoom = view.getZoom();
+      const [lon, lat] = ol.proj.toLonLat(center);
+
+      const scaleFactor = 1.7 / Math.pow(1.7, zoom - 2);
+      const scaledDx = dx * scaleFactor;
+      const scaledDy = dy * scaleFactor;
+
+      const newLat = Math.max(-85, Math.min(85, lat + scaledDy));
+      let newLon = lon + scaledDx;
+
+      while (newLon > 180) newLon -= 360;
+      while (newLon < -180) newLon += 360;
+      const newZoom = Math.max(1, Math.min(18, zoom + dz));
+
+      view.animate({
+        center: ol.proj.fromLonLat([newLon, newLat]),
+        zoom: newZoom,
+        duration: 300
+      });
+    }
+
+    // Process gestures from model
+    function handleGesture(gesture) {
+      if (!gesturesEnabled) return;
+
+      const now = Date.now();
+      if (now - lastGestureTime < gestureCooldown) return;
+      lastGestureTime = now;
+
+      // Reset all arrows first
+      resetArrows();
+
+      // Update UI based on gesture
+      gestureInfo.textContent = `Gesture: ${gesture}`;
+      gestureInfo.classList.add('gesture-active');
+
+      // Activate corresponding arrow
+      switch(gesture.toLowerCase()) {
+        case 'move up':
+          arrowUp.classList.add('active-arrow');
+          moveMap(0, moveStep, 0);
+          break;
+        case 'move down':
+          arrowDown.classList.add('active-arrow');
+          moveMap(0, -moveStep, 0);
+          break;
+        case 'move left':
+          arrowLeft.classList.add('active-arrow');
+          moveMap(-moveStep, 0, 0);
+          break;
+        case 'move right':
+          arrowRight.classList.add('active-arrow');
+          moveMap(moveStep, 0, 0);
+          break;
+        case 'zoom in':
+          zoomIn.classList.add('active-arrow');
+          moveMap(0, 0, zoomStep);
+          break;
+        case 'zoom out':
+          zoomOut.classList.add('active-arrow');
+          moveMap(0, 0, -zoomStep);
+          break;
+        case 'stop':
+          // No action needed
+          break;
+      }
+
+      // Remove active state after animation
+      setTimeout(resetArrows, 500);
+    }
+
+    // Hand tracking and prediction
+    async function initHandTracking() {
+      handsInstance = new Hands({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+      });
+
+      handsInstance.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.7,
+        minTrackingConfidence: 0.7
+      });
+
+      handsInstance.onResults(async (results) => {
+        if (gesturesEnabled && results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+          const landmarks = results.multiHandLandmarks[0].flatMap(
+            landmark => [landmark.x, landmark.y, landmark.z]
+          );
+
+          try {
+            const response = await fetch("http://localhost:8000/predict", {
+              method: "POST",
+              headers: {"Content-Type": "application/json"},
+              body: JSON.stringify({landmarks})
+            });
+
+            const result = await response.json();
+            if (result.status === "success") {
+              handleGesture(result.gesture);
+            }
+          } catch (err) {
+            console.error("Prediction error:", err);
+          }
+        }
+      });
+
+      cameraInstance = new Camera(video, {
+        onFrame: async () => {
+          await handsInstance.send({image: video});
+        },
+        width: 320,
+        height: 240
+      });
+      cameraInstance.start();
+    }
+
+    // Main initialization
+    async function init() {
+      try {
+        // Start camera
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 320, height: 240, facingMode: 'user' }
+        });
+        video.srcObject = stream;
+
+        // Start hand tracking
+        await initHandTracking();
+        gestureInfo.textContent = "Ready - show your hand";
+
+      } catch (err) {
+        gestureInfo.textContent = "Error: " + err.message;
+        console.error("Initialization error:", err);
+      }
+    }
+
+    // Start everything
+    init();
+  </script>
+</body>
+</html>
