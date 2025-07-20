@@ -13,3 +13,6 @@ System Features:
 - Real-time classification with visual feedback
 - Gesture-to-command mapping via custom-trained ML model
 - Responsive OpenLayers map functioning entirely offline
+
+A small demo:
+https://github.com/user-attachments/assets/6ad509b4-34ad-4a41-9ffc-4953f018230a
